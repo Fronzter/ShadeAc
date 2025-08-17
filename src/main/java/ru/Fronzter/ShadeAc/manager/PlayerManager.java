@@ -1,0 +1,33 @@
+package ru.Fronzter.ShadeAc.manager;
+/*
+ * ShadeAc
+ * Copyright (C) 2025 Fronzter
+ *
+ * You may copy, modify, and distribute this plugin,
+ * but **only with its source code included**.
+ * Closed-source distribution or selling without source is prohibited.
+ */
+
+import org.bukkit.entity.Player;
+import ru.Fronzter.ShadeAc.data.PlayerData;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class PlayerManager {
+
+    private final Map<UUID, PlayerData> playerDataMap = new ConcurrentHashMap<>();
+
+    public void addPlayer(Player player) {
+        playerDataMap.put(player.getUniqueId(), new PlayerData(player));
+    }
+
+    public void removePlayer(Player player) {
+        playerDataMap.remove(player.getUniqueId());
+    }
+
+    public PlayerData getPlayerData(Player player) {
+        return playerDataMap.get(player.getUniqueId());
+    }
+}

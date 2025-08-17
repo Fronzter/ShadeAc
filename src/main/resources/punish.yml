@@ -1,0 +1,63 @@
+# анимированное наказание
+animated-punishment:
+  # включить ли вообще возможность анимированных наказаний?
+  # если false, все наказания будут мгновенными, даже если у них стоит 'animate: true'
+  enabled: true
+
+  # команда, которая будет выполняться ПОСЛЕ завершения анимации
+  # %player% - имя игрока, %reason% - причина из секции проверки
+  command: "kick %player% &cYou have been removed by ShadeAc. &7Reason: %reason%"
+
+  animation:
+    style: "DOUBLE_HELIX" # Варианты: SINGLE_SPIRAL, DOUBLE_HELIX
+    duration: 100 # Длительность в тиках (5 секунд)
+    lift-speed: 0.05
+
+    spiral:
+      vertical-movement-enabled: true # движение спирали вверх-вниз?
+      vertical-amplitude: 1.0 # высота волны
+      vertical-speed: 1.0 # скорость волны
+      particle: "REDSTONE"
+      color-shifting: true # переливающиеся цвета для REDSTONE?
+      color-shift-speed: 0.01
+      particle-count: 3
+      radius: 1.5
+      rotation-speed: 25.0
+
+    rings:
+      enabled: true
+      particle: "CRIT_MAGIC"
+      frequency: 20 # Каждые 20 тиков (1 секунда)
+      particle-count: 50
+      radius: 2.0
+
+checks:
+  killaura:
+    A:
+      max-vl: 20
+      animate: true
+      reason: "Unfair Advantage (Aim Assist)"
+      # эти команды будут ИГНОРИРОВАТЬСЯ, если 'animate: true'
+      commands:
+        - "kick %player% Unfair Advantage (Aim Assist)"
+    B:
+      max-vl: 25
+      animate: true
+      reason: "Unnatural Aim"
+      commands:
+        - "kick %player% Unnatural Aim"
+    HML: # наказание для нейросети
+      max-vl: 15
+      animate: true
+      reason: "Machine Learning Detection (Aim)"
+      commands:
+        - "ban %player% Machine Learning Detection (Aim)"
+
+  autoclicker:
+    A:
+      max-vl: 30
+      # Для автокликера оставим мгновенное наказание.
+      animate: false
+      reason: "Autoclicker"
+      commands:
+        - "tempban %player% 7d Autoclicker"
