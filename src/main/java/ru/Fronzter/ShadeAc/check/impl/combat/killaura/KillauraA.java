@@ -7,10 +7,12 @@ package ru.Fronzter.ShadeAc.check.impl.combat.killaura;
  * but **only with its source code included**.
  * Closed-source distribution or selling without source is prohibited.
  */
-import com.comphenix.protocol.events.PacketContainer;
+
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.Bukkit;
 import ru.Fronzter.ShadeAc.ShadeAc;
 import ru.Fronzter.ShadeAc.check.Check;
 import ru.Fronzter.ShadeAc.data.PlayerData;
@@ -35,12 +37,24 @@ public class KillauraA extends Check {
         this.minSmoothnessRatio = ac.getConfigManager().getCheckValueDouble(getName(), getType(), "min-smoothness-ratio");
     }
 
-    public void handleUseEntity(PacketContainer packet) {
+    public void handleUseEntity(WrapperPlayClientInteractEntity packet) {
         if (data.getYawHistory().size() < 3) {
             return;
         }
 
-        Entity target = packet.getEntityModifier(data.getPlayer().getWorld()).read(0);
+        int targetId = packet.getEntityId();
+        Entity target = null;
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p.getEntityId() == targetId) {
+                target = p;
+                break;
+            }
+        }
+
+        if (target == null) {
+            return;
+        }
+
         if (!(target instanceof Player)) {
             return;
         }
@@ -50,19 +64,15 @@ public class KillauraA extends Check {
         List<Float> deltaYaws = new ArrayList<>(data.getDeltaYawHistory());
 
         float yawBefore = yaws.get(yaws.size() - 2);
-        float pitchBefore = pitches.get(pitches.size() - 2);
+        float pitchBefore = pitches.get(yaws.size() - 2);
         Location locationBefore = data.getPlayer().getEyeLocation().clone();
         locationBefore.setYaw(yawBefore);
         locationBefore.setPitch(pitchBefore);
 
         float[] angleToTargetAfter = SnapUtil.getAngleToTarget(data.getPlayer(), target.getLocation().add(0, target.getHeight() * 0.8, 0));
-
         float[] angleToTargetBefore = RotationUtil.getRotations(locationBefore, target.getLocation().add(0, target.getHeight() * 0.8, 0));
-
         float yawCorrectionNeeded = Math.abs(MathUtil.wrapAngleTo180(locationBefore.getYaw() - angleToTargetBefore[0]));
-
         float finalMissAngle = Math.abs(angleToTargetAfter[0]);
-
         float acceleration = SnapUtil.getRotationAcceleration(deltaYaws.get(deltaYaws.size() - 2), deltaYaws.get(deltaYaws.size() - 1));
         double smoothness = SnapUtil.getRotationSmoothnessRatio(deltaYaws.get(deltaYaws.size() - 2), deltaYaws.get(deltaYaws.size() - 1));
 
