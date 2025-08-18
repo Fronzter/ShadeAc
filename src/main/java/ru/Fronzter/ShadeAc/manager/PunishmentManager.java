@@ -7,133 +7,51 @@ package ru.Fronzter.ShadeAc.manager;
  * but **only with its source code included**.
  * Closed-source distribution or selling without source is prohibited.
  */
-
-import org.bukkit.Bukkit;
-import org.bukkit.Particle;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
 import ru.Fronzter.ShadeAc.ShadeAc;
-import ru.Fronzter.ShadeAc.animation.PunishmentAnimation;
-import ru.Fronzter.ShadeAc.check.Check;
+import ru.Fronzter.ShadeAc.config.PunishmentConfig;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class PunishmentManager {
 
     private final ShadeAc plugin;
-    private FileConfiguration punishmentConfig;
+    private final Map<String, PunishmentConfig> punishmentCache = new HashMap<>();
 
     public PunishmentManager(ShadeAc plugin) {
         this.plugin = plugin;
-        loadPunishments();
+        load();
     }
 
-    private void loadPunishments() {
-        File configFile = new File(plugin.getDataFolder(), "punish.yml");
-        if (!configFile.exists()) {
-            plugin.saveResource("punish.yml", false);
-        }
-        this.punishmentConfig = YamlConfiguration.loadConfiguration(configFile);
-    }
+    public void load() {
+        punishmentCache.clear();
 
-    public void executePunishment(Player player, Check check) {
-        String path = getCheckPath(check);
+        File file = new File(plugin.getDataFolder(), "punish.yml");
+        if (!file.exists()) plugin.saveResource("punish.yml", false);
 
-        if (punishmentConfig.getBoolean("animated-punishment.enabled") && punishmentConfig.getBoolean(path + ".animate")) {
-            String reason = punishmentConfig.getString(path + ".reason", "Cheating");
-            String commandTemplate = getAnimatedPunishmentCommand();
+        FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection section = config.getConfigurationSection("punishments");
 
-            String finalCommand = commandTemplate
-                    .replace("%player%", player.getName())
-                    .replace("%reason%", reason);
+        if (section == null) return;
 
-            new PunishmentAnimation(plugin, player, finalCommand).runTaskTimer(plugin, 0L, 1L);
-        } else {
-            List<String> commands = punishmentConfig.getStringList(path + ".commands");
-            if (commands.isEmpty()) return;
+        for (String key : section.getKeys(false)) {
+            boolean animate = section.getBoolean(key + ".animate", false);
+            int maxVl = section.getInt(key + ".max-vl", 20);
+            String reason = section.getString(key + ".reason", "Unfair Advantage");
+            List<String> commands = section.getStringList(key + ".commands");
 
-            commands.forEach(cmd -> executeCommand(cmd.replace("%player%", player.getName())));
+            PunishmentConfig punishment = new PunishmentConfig(animate, maxVl, reason, commands);
+            punishmentCache.put(key.toLowerCase(), punishment);
         }
     }
 
-    public void executeCommand(String command) {
-        Bukkit.getScheduler().runTask(plugin, () ->
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
-    }
-
-    private String getCheckPath(Check check) {
-        return String.format("checks.%s.%s", check.getName().toLowerCase(), check.getType());
-    }
-
-    public int getPunishVL(Check check) {
-        String path = getCheckPath(check) + ".max-vl";
-        return punishmentConfig.getInt(path, Integer.MAX_VALUE);
-    }
-
-    public String getAnimatedPunishmentCommand() {
-        return punishmentConfig.getString("animated-punishment.command", "kick %player% %reason%");
-    }
-    public String getAnimationStyle() {
-        return punishmentConfig.getString("animated-punishment.animation.style", "DOUBLE_HELIX").toUpperCase();
-    }
-    public long getAnimationDuration() {
-        return punishmentConfig.getLong("animated-punishment.animation.duration", 100L);
-    }
-    public double getAnimationLiftSpeed() {
-        return punishmentConfig.getDouble("animated-punishment.animation.lift-speed", 0.05);
-    }
-    public Particle getSpiralParticle() {
-        try {
-            return Particle.valueOf(punishmentConfig.getString("animated-punishment.animation.spiral.particle", "REDSTONE").toUpperCase());
-        } catch (Exception e) {
-            return Particle.REDSTONE;
-        }
-    }
-    public boolean isSpiralColorShifting() {
-        return punishmentConfig.getBoolean("animated-punishment.animation.spiral.color-shifting", true);
-    }
-    public double getColorShiftSpeed() {
-        return punishmentConfig.getDouble("animated-punishment.animation.spiral.color-shift-speed", 0.01);
-    }
-    public int getSpiralParticleCount() {
-        return punishmentConfig.getInt("animated-punishment.animation.spiral.particle-count", 3);
-    }
-    public double getSpiralRadius() {
-        return punishmentConfig.getDouble("animated-punishment.animation.spiral.radius", 1.5);
-    }
-    public double getSpiralRotationSpeed() {
-        return punishmentConfig.getDouble("animated-punishment.animation.spiral.rotation-speed", 25.0);
-    }
-
-    public boolean isSpiralVerticalMovementEnabled() {
-        return punishmentConfig.getBoolean("animated-punishment.animation.spiral.vertical-movement-enabled", true);
-    }
-    public double getSpiralVerticalAmplitude() {
-        return punishmentConfig.getDouble("animated-punishment.animation.spiral.vertical-amplitude", 1.0);
-    }
-    public double getSpiralVerticalSpeed() {
-        return punishmentConfig.getDouble("animated-punishment.animation.spiral.vertical-speed", 1.0);
-    }
-
-    public boolean isRingsEnabled() {
-        return punishmentConfig.getBoolean("animated-punishment.animation.rings.enabled", true);
-    }
-    public Particle getRingParticle() {
-        try {
-            return Particle.valueOf(punishmentConfig.getString("animated-punishment.animation.rings.particle", "CRIT_MAGIC").toUpperCase());
-        } catch (Exception e) {
-            return Particle.CRIT_MAGIC;
-        }
-    }
-    public int getRingFrequency() {
-        return punishmentConfig.getInt("animated-punishment.animation.rings.frequency", 20);
-    }
-    public int getRingParticleCount() {
-        return punishmentConfig.getInt("animated-punishment.animation.rings.particle-count", 50);
-    }
-    public double getRingRadius() {
-        return punishmentConfig.getDouble("animated-punishment.animation.rings.radius", 2.0);
+    public PunishmentConfig getPunishment(String key) {
+        if (key == null || key.isEmpty()) return null;
+        return punishmentCache.get(key.toLowerCase());
     }
 }

@@ -7,86 +7,74 @@ package ru.Fronzter.ShadeAc.check.impl.combat.killaura;
  * but **only with its source code included**.
  * Closed-source distribution or selling without source is prohibited.
  */
-
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
-import org.bukkit.Location;
+import com.comphenix.protocol.PacketType;
+import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.wrappers.EnumWrappers;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.bukkit.Bukkit;
 import ru.Fronzter.ShadeAc.ShadeAc;
 import ru.Fronzter.ShadeAc.check.Check;
+import ru.Fronzter.ShadeAc.check.CheckCategory;
+import ru.Fronzter.ShadeAc.check.CheckInfo;
 import ru.Fronzter.ShadeAc.data.PlayerData;
-import ru.Fronzter.ShadeAc.utils.location.RotationUtil;
-import ru.Fronzter.ShadeAc.utils.location.SnapUtil;
-import ru.Fronzter.ShadeAc.utils.math.MathUtil;
+import ru.Fronzter.ShadeAc.data.update.RotationUpdate;
+import ru.Fronzter.ShadeAc.util.anticheat.AimUtil;
 
-import java.util.ArrayList;
-import java.util.List;
-
+@CheckInfo(
+        name = "Killaura",
+        subType = "A",
+        category = CheckCategory.COMBAT,
+        description = "Detects impossibly fast and accurate aim snaps onto targets."
+)
 public class KillauraA extends Check {
 
-    private final double minCorrectionAngle, maxFinalAngle, minAcceleration, minSmoothnessRatio;
+    private RotationUpdate previousUpdate, currentUpdate;
 
-    public KillauraA(PlayerData data) {
-        super(data, "Killaura", "A");
+    private final double minCorrectionAngle;
+    private final double maxFinalAngle;
+    private final double minAcceleration;
 
-        ShadeAc ac = ShadeAc.getInstance();
-        this.minCorrectionAngle = ac.getConfigManager().getCheckValueDouble(getName(), getType(), "min-correction-angle");
-        this.maxFinalAngle = ac.getConfigManager().getCheckValueDouble(getName(), getType(), "max-final-angle");
-        this.minAcceleration = ac.getConfigManager().getCheckValueDouble(getName(), getType(), "min-acceleration");
-        this.minSmoothnessRatio = ac.getConfigManager().getCheckValueDouble(getName(), getType(), "min-smoothness-ratio");
+    public KillauraA(PlayerData playerData) {
+        super(playerData);
+        ConfigurationSection section = ShadeAc.getInstance().getConfigManager().getCheckSection(this);
+        if (section != null) {
+            this.minCorrectionAngle = section.getDouble("min-correction-angle", 5.0);
+            this.maxFinalAngle = section.getDouble("max-final-angle", 0.8);
+            this.minAcceleration = section.getDouble("min-acceleration", 10.0);
+        } else {
+            this.minCorrectionAngle = 5.0;
+            this.maxFinalAngle = 0.8;
+            this.minAcceleration = 10.0;
+        }
     }
 
-    public void handleUseEntity(WrapperPlayClientInteractEntity packet) {
-        if (data.getYawHistory().size() < 3) {
-            return;
-        }
+    @Override
+    public void onRotation(RotationUpdate update) {
+        this.previousUpdate = this.currentUpdate;
+        this.currentUpdate = update;
+    }
 
-        int targetId = packet.getEntityId();
-        Entity target = null;
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            if (p.getEntityId() == targetId) {
-                target = p;
-                break;
-            }
-        }
+    @Override
+    public void onPacketReceiving(PacketEvent event) {
+        if (event.getPacketType() != PacketType.Play.Client.USE_ENTITY) return;
+        if (event.getPacket().getEntityUseActions().read(0) != EnumWrappers.EntityUseAction.ATTACK) return;
+        if (previousUpdate == null || currentUpdate == null) return;
 
-        if (target == null) {
-            return;
-        }
+        Entity target = event.getPacket().getEntityModifier(playerData.getPlayer().getWorld()).read(0);
+        if (target == null) return;
 
-        if (!(target instanceof Player)) {
-            return;
-        }
+        float angleBefore = AimUtil.getAngleToEntity(playerData.getPlayer(), target);
+        float angleBeforeSnap = AimUtil.getAngleDifference(angleBefore, currentUpdate.getDeltaYaw());
+        float angleAfterSnap = angleBefore;
+        float acceleration = currentUpdate.getAbsDeltaYaw() - previousUpdate.getAbsDeltaYaw();
 
-        List<Float> yaws = new ArrayList<>(data.getYawHistory());
-        List<Float> pitches = new ArrayList<>(data.getPitchHistory());
-        List<Float> deltaYaws = new ArrayList<>(data.getDeltaYawHistory());
+        boolean isHighAcceleration = acceleration > minAcceleration;
+        boolean wasCorrection = angleBeforeSnap > minCorrectionAngle;
+        boolean isPrecise = angleAfterSnap < maxFinalAngle;
 
-        float yawBefore = yaws.get(yaws.size() - 2);
-        float pitchBefore = pitches.get(yaws.size() - 2);
-        Location locationBefore = data.getPlayer().getEyeLocation().clone();
-        locationBefore.setYaw(yawBefore);
-        locationBefore.setPitch(pitchBefore);
-
-        float[] angleToTargetAfter = SnapUtil.getAngleToTarget(data.getPlayer(), target.getLocation().add(0, target.getHeight() * 0.8, 0));
-        float[] angleToTargetBefore = RotationUtil.getRotations(locationBefore, target.getLocation().add(0, target.getHeight() * 0.8, 0));
-        float yawCorrectionNeeded = Math.abs(MathUtil.wrapAngleTo180(locationBefore.getYaw() - angleToTargetBefore[0]));
-        float finalMissAngle = Math.abs(angleToTargetAfter[0]);
-        float acceleration = SnapUtil.getRotationAcceleration(deltaYaws.get(deltaYaws.size() - 2), deltaYaws.get(deltaYaws.size() - 1));
-        double smoothness = SnapUtil.getRotationSmoothnessRatio(deltaYaws.get(deltaYaws.size() - 2), deltaYaws.get(deltaYaws.size() - 1));
-
-        boolean neededCorrection = yawCorrectionNeeded > minCorrectionAngle;
-        boolean wasAccurate = finalMissAngle < maxFinalAngle;
-        boolean wasJerky = acceleration > minAcceleration || smoothness > minSmoothnessRatio;
-
-        if (neededCorrection && wasAccurate && wasJerky) {
-            flag(
-                    String.format("needed: %.2f", yawCorrectionNeeded),
-                    String.format("miss: %.2f", finalMissAngle),
-                    String.format("accel: %.2f", acceleration),
-                    String.format("smooth: %.2f", smoothness)
-            );
+        if (isHighAcceleration && wasCorrection && isPrecise) {
+            flag(String.format("before:%.2f after:%.2f accel:%.2f",
+                    angleBeforeSnap, angleAfterSnap, acceleration));
         }
     }
 }

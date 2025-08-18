@@ -1,63 +1,65 @@
-# анимированное наказание
-animated-punishment:
-  # включить ли вообще возможность анимированных наказаний?
-  # если false, все наказания будут мгновенными, даже если у них стоит 'animate: true'
+# Эти настройки применяются ко всем наказаниям, у которых стоит 'animate: true'.
+animation-settings:
+  # Включить ли вообще возможность анимированных наказаний?
   enabled: true
 
-  # команда, которая будет выполняться ПОСЛЕ завершения анимации
-  # %player% - имя игрока, %reason% - причина из секции проверки
-  command: "kick %player% &cYou have been removed by ShadeAc. &7Reason: %reason%"
+  # Команда, которая будет выполняться ПОСЛЕ завершения анимации.
+  post-animation-command: "kick %player% &cYou have been removed by ShadeAc. &7Reason: %reason%"
 
-  animation:
-    style: "DOUBLE_HELIX" # Варианты: SINGLE_SPIRAL, DOUBLE_HELIX
-    duration: 100 # Длительность в тиках (5 секунд)
-    lift-speed: 0.05
+  # Длительность анимации в тиках (60 тиков = 3 секунды).
+  duration: 60
 
-    spiral:
-      vertical-movement-enabled: true # движение спирали вверх-вниз?
-      vertical-amplitude: 1.0 # высота волны
-      vertical-speed: 1.0 # скорость волны
-      particle: "REDSTONE"
-      color-shifting: true # переливающиеся цвета для REDSTONE?
-      color-shift-speed: 0.01
-      particle-count: 3
-      radius: 1.5
-      rotation-speed: 25.0
+  # Скорость, с которой игрока будет поднимать вверх.
+  lift-speed: 0.05
 
-    rings:
-      enabled: true
-      particle: "CRIT_MAGIC"
-      frequency: 20 # Каждые 20 тиков (1 секунда)
-      particle-count: 50
-      radius: 2.0
+  # Настройки спирали из частиц
+  spiral:
+    particle-type: "REDSTONE"
+    particle-count: 4
+    radius: 1.5
+    rotation-speed: 50.0
+    color-shifting: true
+    color-shift-speed: 0.03
 
-checks:
-  killaura:
-    A:
-      max-vl: 20
-      animate: true
-      reason: "Unfair Advantage (Aim Assist)"
-      # эти команды будут ИГНОРИРОВАТЬСЯ, если 'animate: true'
-      commands:
-        - "kick %player% Unfair Advantage (Aim Assist)"
-    B:
-      max-vl: 25
-      animate: true
-      reason: "Unnatural Aim"
-      commands:
-        - "kick %player% Unnatural Aim"
-    HML: # наказание для нейросети
-      max-vl: 15
-      animate: true
-      reason: "Machine Learning Detection (Aim)"
-      commands:
-        - "ban %player% Machine Learning Detection (Aim)"
+  # Настройки для финального хлопка читераста
+  explosion-effect:
+    enabled: true
+    particle-type: "EXPLOSION_HUGE"
+    sound: "ENTITY_GENERIC_EXPLODE"
+    volume: 1.0
+    pitch: 1.2
 
-  autoclicker:
-    A:
-      max-vl: 30
-      # Для автокликера оставим мгновенное наказание.
-      animate: false
-      reason: "Autoclicker"
-      commands:
-        - "tempban %player% 7d Autoclicker"
+punishments:
+  # Наказание для Killaura A
+  killaura-a-punishment:
+    # Использовать ли анимированное наказание?
+    # Если true, команды ниже будут проигнорированы.
+    animate: true
+    # Порог VL, при котором сработает наказание.
+    max-vl: 20
+    # Причина для плейсхолдера %reason%.
+    reason: "Unfair Advantage (Killaura)"
+    # Команды для мгновенного наказания (если animate: false).
+    commands:
+      - "kick %player% [ShadeAc] %reason%"
+
+  killaura-b-punishment:
+    animate: false
+    max-vl: 25
+    reason: "Unnatural Aim Patterns"
+    commands:
+      - "kick %player% [ShadeAc] %reason%"
+
+  aim-a-punishment:
+    animate: false
+    max-vl: 30
+    reason: "Unfair Advantage (Aim Assist)"
+    commands:
+      - "kick %player% [ShadeAc] %reason%"
+
+  aim-b-punishment:
+    animate: true
+    max-vl: 15
+    reason: "Unfair Advantage (Smooth Aim)"
+    commands:
+      - "ban %player% 7d [ShadeAc] %reason%"

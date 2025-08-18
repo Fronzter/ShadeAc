@@ -15,8 +15,8 @@ repositories {
 dependencies {
     compileOnly 'com.destroystokyo.paper:paper-api:1.16.5-R0.1-SNAPSHOT'
     compileOnly name: 'spigot-1.16.5'
+    compileOnly name: 'ProtocolLib'
 
-    implementation name: 'packetevents-spigot-2.9.4'
     implementation 'org.apache.commons:commons-math3:3.6.1'
 
     compileOnly 'org.projectlombok:lombok:1.18.38'
@@ -49,7 +49,6 @@ tasks.named('shadowJar') {
 
     dependencies {
         include(dependency('org.apache.commons:commons-math3:3.6.1'))
-        include(dependency(name: 'packetevents-spigot-2.9.4'))
     }
 }
 

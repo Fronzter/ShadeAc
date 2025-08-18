@@ -7,66 +7,56 @@ package ru.Fronzter.ShadeAc.check;
  * but **only with its source code included**.
  * Closed-source distribution or selling without source is prohibited.
  */
+import com.comphenix.protocol.events.PacketEvent;
 import lombok.Getter;
 import ru.Fronzter.ShadeAc.ShadeAc;
+import ru.Fronzter.ShadeAc.config.CheckConfig;
 import ru.Fronzter.ShadeAc.data.PlayerData;
-import ru.Fronzter.ShadeAc.manager.PunishmentManager;
-import ru.Fronzter.ShadeAc.mitigation.MitigationType;
+import ru.Fronzter.ShadeAc.data.update.RotationUpdate;
 
 @Getter
 public abstract class Check {
 
-    protected final PlayerData data;
-    private final String name;
-    private final String type;
+    protected final PlayerData playerData;
+    private final CheckInfo info;
+    private final CheckConfig config;
+    private double violationLevel;
+    private long lastFlagTime;
 
-    private int violations;
-    private final boolean enabled;
-    private final int maxViolations;
+    public Check(PlayerData playerData) {
+        this.playerData = playerData;
+        this.info = getClass().getAnnotation(CheckInfo.class);
+        if (info == null) {
+            throw new IllegalStateException("Check " + getClass().getSimpleName() + " is missing @CheckInfo annotation!");
+        }
 
-    // настройки митигации
-    private final boolean mitigationEnabled;
-    private final MitigationType mitigationType;
-
-    public Check(PlayerData data, String name, String type) {
-        this.data = data;
-        this.name = name;
-        this.type = type;
-
-        ShadeAc ac = ShadeAc.getInstance();
-        this.enabled = ac.getConfigManager().isCheckEnabled(name, type);
-        this.maxViolations = ac.getPunishmentManager().getPunishVL(this);
-
-        // настройки митигации при создании чека
-        this.mitigationEnabled = ac.getConfigManager().isMitigationEnabled(name, type);
-        this.mitigationType = ac.getConfigManager().getMitigationType(name, type);
+        this.config = ShadeAc.getInstance().getConfigManager().getCheckConfig(this);
+        this.lastFlagTime = System.currentTimeMillis();
     }
 
-    protected void flag(String... debugInfo) {
-        if (!enabled) {
-            return;
-        }
+    public void onPacketReceiving(PacketEvent event) { }
+    public void onRotation(RotationUpdate update) { }
 
-        this.violations++;
-        String debug = String.join(", ", debugInfo);
-
-        // алерт
-        ShadeAc.getInstance().getAlertManager().sendAlert(data, this, debug);
-
-        // флаг митигации если он врублен
-        if (mitigationEnabled) {
-            data.setNextMitigation(this.mitigationType);
-        }
-
-        // проверять не пора ли выдать наказание :>
-        if (violations >= maxViolations && maxViolations != Integer.MAX_VALUE) {
-            handlePunishment();
+    public void tick() {
+        long timeSinceLastFlag = System.currentTimeMillis() - lastFlagTime;
+        if (timeSinceLastFlag > 2000) {
+            decay();
         }
     }
 
-    private void handlePunishment() {
-        PunishmentManager pm = ShadeAc.getInstance().getPunishmentManager();
-        pm.executePunishment(data.getPlayer(), this);
-        this.violations = 0;
+    protected void flag(String debugInfo) {
+        this.violationLevel++;
+        this.lastFlagTime = System.currentTimeMillis();
+        ShadeAc.getInstance().getMitigationManager().applyMitigation(playerData, this);
+        ShadeAc.getInstance().getAlertManager().handleViolation(this, debugInfo);
     }
+
+    protected void decay() {
+        this.violationLevel = Math.max(0.0, violationLevel - 0.25);
+    }
+
+    public String getName() { return info.name(); }
+    public String getSubType() { return info.subType(); }
+    public CheckCategory getCategory() { return info.category(); }
+    public String getFullName() { return info.name() + " (" + info.subType() + ")"; }
 }

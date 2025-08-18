@@ -7,64 +7,69 @@ package ru.Fronzter.ShadeAc;
  * but **only with its source code included**.
  * Closed-source distribution or selling without source is prohibited.
  */
-
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.ProtocolManager;
 import lombok.Getter;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import ru.Fronzter.ShadeAc.command.ShadeAcCommand;
-import ru.Fronzter.ShadeAc.command.ShadeAcMLCommand;
-import ru.Fronzter.ShadeAc.command.ShadeAcPunishCommand;
+import ru.Fronzter.ShadeAc.command.CommandManager;
 import ru.Fronzter.ShadeAc.listener.MitigationListener;
-import ru.Fronzter.ShadeAc.listener.PacketListener;
-import ru.Fronzter.ShadeAc.listener.PlayerListener;
-import ru.Fronzter.ShadeAc.manager.AlertManager;
-import ru.Fronzter.ShadeAc.manager.CheckManager;
-import ru.Fronzter.ShadeAc.manager.ConfigManager;
-import ru.Fronzter.ShadeAc.manager.PlayerManager;
-import ru.Fronzter.ShadeAc.manager.PunishmentManager;
-import ru.Fronzter.ShadeAc.ml.DataCollectionManager;
-import ru.Fronzter.ShadeAc.nms.NMSManager;
-import ru.Fronzter.ShadeAc.task.TickTask;
+import ru.Fronzter.ShadeAc.listener.PacketProcessor;
+import ru.Fronzter.ShadeAc.listener.PlayerConnectionListener;
+import ru.Fronzter.ShadeAc.listener.PlayerMoveListener;
+import ru.Fronzter.ShadeAc.manager.*;
+
+import java.util.Set;
+import java.util.UUID;
 
 @Getter
 public final class ShadeAc extends JavaPlugin {
 
-    @Getter private static ShadeAc instance;
+    @Getter
+    private static ShadeAc instance;
 
     private ConfigManager configManager;
-    private AlertManager alertManager;
     private PunishmentManager punishmentManager;
-    private PlayerManager playerManager;
+    private AnimationManager animationManager;
+    private PlayerDataManager playerDataManager;
     private CheckManager checkManager;
-    private NMSManager nmsManager;
-    private DataCollectionManager dataCollectionManager;
+    private MitigationManager mitigationManager;
+    private AlertManager alertManager;
+
+    private ProtocolManager protocolManager;
 
     @Override
     public void onEnable() {
         instance = this;
+        this.protocolManager = ProtocolLibrary.getProtocolManager();
 
         this.configManager = new ConfigManager(this);
-        this.alertManager = new AlertManager(this);
         this.punishmentManager = new PunishmentManager(this);
-        this.nmsManager = new NMSManager(this);
-
-        if (!this.isEnabled()) return;
-
-        this.playerManager = new PlayerManager();
+        this.animationManager = new AnimationManager(this);
+        this.playerDataManager = new PlayerDataManager();
         this.checkManager = new CheckManager();
-        this.dataCollectionManager = new DataCollectionManager(this);
+        this.mitigationManager = new MitigationManager();
+        this.alertManager = new AlertManager();
 
-        new PlayerListener(this);
-        new PacketListener(this);
-        new MitigationListener(this);
+        new PacketProcessor().register();
 
-        getCommand("shadeac").setExecutor(new ShadeAcCommand(this));
-        getCommand("shadeacpunish").setExecutor(new ShadeAcPunishCommand(this));
-        getCommand("shadeacml").setExecutor(new ShadeAcMLCommand(this));
+        this.getServer().getPluginManager().registerEvents(new PlayerConnectionListener(), this);
+        this.getServer().getPluginManager().registerEvents(new PlayerMoveListener(), this);
+        this.getServer().getPluginManager().registerEvents(new MitigationListener(), this);
 
-        new TickTask(this).runTaskTimer(this, 1L, 1L);
+        CommandManager commandManager = new CommandManager();
+        getCommand("shadeac").setExecutor(commandManager);
+        getCommand("shadeac").setTabCompleter(commandManager);
     }
 
     @Override
     public void onDisable() {
+        for (UUID uuid : Set.copyOf(animationManager.getFrozenPlayers())) {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline()) {
+                animationManager.forceUnfreeze(player);
+            }
+        }
     }
 }
